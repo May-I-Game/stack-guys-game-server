@@ -43,9 +43,6 @@ public class LoginManager : MonoBehaviour
         selectedColorIndex = PlayerPrefs.GetInt("PlayerColorIndex", 0);
         UpdateColorIndicator();
 
-        // C++ 서버의 에러 처리는 제거합니다.
-        // if (PlayerPrefs.HasKey("ServerFullError")) { ... }
-
         // (중요) Netcode 연결 콜백을 등록합니다.
         // NetworkManager가 DontDestroyOnLoad이므로, 이 스크립트가 파괴되기 전에
         // 콜백을 등록하고 해제하는 것이 좋습니다.

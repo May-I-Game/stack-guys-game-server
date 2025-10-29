@@ -8,20 +8,20 @@ using UnityEngine.UI;
 public class NetworkPlayer : NetworkBehaviour
 {
     [Header("Nickname UI")]
-    [SerializeField] protected Canvas nicknameCanvas;
-    [SerializeField] protected Text nicknameText;
+    [SerializeField] private Canvas nicknameCanvas;
+    [SerializeField] private Text nicknameText;
 
     [Header("Movement")]
-    [SerializeField] protected float moveSpeed = 5f;
-    [SerializeField] protected float jumpForce = 8f; // [추가] 점프 힘
+    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float jumpForce = 8f; // [추가] 점프 힘
 
-    protected Rigidbody rb;
-    protected MeshRenderer meshRenderer;
+    private Rigidbody rb;
+    private MeshRenderer meshRenderer;
 
     // 카메라 참조 (로컬 플레이어 전용)
-    protected CameraFollow cameraFollow;
+    private CameraFollow cameraFollow;
 
-    // C++의 gameWorld_.setPlayerInput()을 위해 클라이언트가 보낸 입력 값
+    // PlayerInput()을 위해 클라이언트가 보낸 입력 값
     protected Vector3 serverInputMovement = Vector3.zero;
     protected bool serverJumpQueued = false;
 
@@ -32,10 +32,6 @@ public class NetworkPlayer : NetworkBehaviour
     // NetworkVariableReadPermission.Everyone : 모두가 읽을 수 있음
     // NetworkVariableWritePermission.Server : 오직 서버만 쓸 수 있음
 
-    protected NetworkVariable<Vector3> serverPosition = new NetworkVariable<Vector3>(
-        Vector3.zero, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
-    protected NetworkVariable<Quaternion> serverRotation = new NetworkVariable<Quaternion>(
-        Quaternion.identity, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
     // 닉네임 동기화
     protected NetworkVariable<FixedString64Bytes> playerNickname = new NetworkVariable<FixedString64Bytes>(
         "", NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
@@ -122,11 +118,11 @@ public class NetworkPlayer : NetworkBehaviour
     {
         if (IsServer)
         {
-            // 1. 저장된 입력(serverInputMovement)을 기반으로 위치 계산
+            // 저장된 입력(serverInputMovement)을 기반으로 위치 계산
             Vector3 newVelocity = serverInputMovement * moveSpeed;
             newVelocity.y = rb.linearVelocity.y;
 
-            // 3. ⭐(핵심 수정)⭐ 서버 자신의 transform.position도 갱신 (다음 FixedUpdate를 위해)
+            // 서버 자신의 Rigidbody 속도 갱신
             rb.linearVelocity = newVelocity;
 
             // 점프
@@ -136,27 +132,14 @@ public class NetworkPlayer : NetworkBehaviour
                 serverJumpQueued = false;
             }
 
-            // 2. '권위있는' NetworkVariable 갱신
-            // (이 값이 클라이언트의 'ApplyServerState'로 전송됩니다)
-            serverPosition.Value = rb.position;
-
-            // 4. 회전 값 갱신
+            // 회전 값 갱신
             if (serverInputMovement.magnitude > 0.1f)
             {
                 Quaternion newRot = Quaternion.LookRotation(serverInputMovement);
 
-                // 6. ⭐(핵심 수정)⭐ 서버 자신의 transform.rotation도 갱신
+                // 서버 자신의 Rigidbody 회전 갱신
                 rb.MoveRotation(newRot);
-
-                // 5. NetworkVariable 갱신 (클라이언트 전송)
-                serverRotation.Value = newRot;
             }
-        }
-
-        // 클라이언트는 서버상태를 적용하기만
-        else
-        {
-            ApplyServerState();
         }
     }
 
@@ -213,18 +196,6 @@ public class NetworkPlayer : NetworkBehaviour
         }
     }
 
-    // 서버 정보로 위치와 회전을 보간
-    private void ApplyServerState()
-    {
-        Vector3 serverPos = serverPosition.Value;
-        Quaternion serverRot = serverRotation.Value;
-
-        // 모든 클라이언트 (로컬 플레이어 포함)는 서버 위치로 Lerp합니다.
-        // isKinematic = true 이므로 Lerp가 물리 엔진과 충돌하지 않습니다.
-        rb.MovePosition(Vector3.Lerp(rb.position, serverPos, Time.fixedDeltaTime * 10f));
-        rb.MoveRotation(Quaternion.Lerp(transform.rotation, serverRot, Time.fixedDeltaTime * 10f));
-    }
-
     // ===================================================================
     // 5. 서버 RPC (C++의 handleMessage)
     // ===================================================================
@@ -244,14 +215,14 @@ public class NetworkPlayer : NetworkBehaviour
     }
 
     [ServerRpc]
-    private void SubmitInputServerRpc(Vector3 movement)
+    protected void SubmitInputServerRpc(Vector3 movement)
     {
         // 받은 입력을 FixedUpdate가 사용할 수 있도록 저장
         serverInputMovement = movement;
     }
 
     [ServerRpc]
-    private void SubmitJumpServerRpc()
+    protected void SubmitJumpServerRpc()
     {
         Debug.Log($"[Server Log] Player {OwnerClientId} JUMP!");
         serverJumpQueued = true;

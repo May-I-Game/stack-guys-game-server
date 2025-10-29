@@ -93,7 +93,7 @@ public class DummyManager : NetworkBehaviour
 
         for (int i = 0; i < count; i++)
         {
-            Vector3 spawnPosition = new Vector3(Random.Range(-10f, 10f), 1.0f, Random.Range(-10f, 10f));
+            Vector3 spawnPosition = new Vector3(Random.Range(-10f, 10f), 0f, Random.Range(-10f, 10f));
             GameObject dummyInstance = Instantiate(dummyPrefab, spawnPosition, Quaternion.identity);
             NetworkObject networkObject = dummyInstance.GetComponent<NetworkObject>();
             DummyPlayer dummyController = dummyInstance.GetComponent<DummyPlayer>();

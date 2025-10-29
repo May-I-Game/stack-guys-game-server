@@ -13,34 +13,9 @@ public class FPSCounter : MonoBehaviour
     private float timeleft;
     private float fps;
 
-    void Start()
+    private void Awake()
     {
-        // Canvas 생성
-        GameObject canvasGO = new GameObject("FPS Canvas");
-        Canvas canvas = canvasGO.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvasGO.AddComponent<CanvasScaler>();
-        canvasGO.AddComponent<GraphicRaycaster>();
-
-        // FPS Text 생성
-        GameObject textGO = new GameObject("FPS Text");
-        textGO.transform.SetParent(canvasGO.transform);
-
-        fpsText = textGO.AddComponent<Text>();
-        fpsText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        fpsText.fontSize = 24;
-        fpsText.color = Color.yellow;
-        fpsText.alignment = TextAnchor.UpperLeft;
-
-        // 위치 설정 (좌측 상단)
-        RectTransform rectTransform = textGO.GetComponent<RectTransform>();
-        rectTransform.anchorMin = new Vector2(0, 1);
-        rectTransform.anchorMax = new Vector2(0, 1);
-        rectTransform.pivot = new Vector2(0, 1);
-        rectTransform.anchoredPosition = new Vector2(10, -10);
-        rectTransform.sizeDelta = new Vector2(200, 50);
-
-        timeleft = updateInterval;
+        fpsText = GetComponent<Text>();
     }
 
     void Update()
@@ -52,11 +27,11 @@ public class FPSCounter : MonoBehaviour
         ++frames;
 
         // 업데이트 간격마다 FPS 계산
-        if (timeleft <= 0.0f)
+        if (timeleft <= 0f)
         {
             fps = accum / frames;
             timeleft = updateInterval;
-            accum = 0.0f;
+            accum = 0f;
             frames = 0;
 
             UpdateDisplay();
