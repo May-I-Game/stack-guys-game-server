@@ -13,8 +13,9 @@ public class DummyManager : NetworkBehaviour
     private int numberOfDummiesToSpawn = 10;
 
     // 서버에 스폰된 '더미' 목록 (서버 전용)
-    private List<DummyPlayer> spawnedDummies = new List<DummyPlayer>();
+    private Dictionary<ulong, List<DummyPlayer>> spawnedDummiesByClient = new();
     private int dummyCounter = 0;
+    private int nextDummyId = 0;
 
     // 싱글톤 (편의상)
     public static DummyManager Instance { get; private set; }
@@ -25,10 +26,24 @@ public class DummyManager : NetworkBehaviour
         else Destroy(gameObject);
     }
 
+    public override void OnNetworkSpawn()
+    {
+        // 서버에서만 콜백을 등록합니다.
+        if (!IsServer) return;
+
+        if (dummyPrefab == null)
+        {
+            Debug.LogError("[DummyManager] Dummy Prefab is not set!", this);
+            return;
+        }
+
+        NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
+    }
+
     // ===================================================================
     // 클라이언트 UI 입력 처리 (DummyUIManager 역할)
     // ===================================================================
-    void Update()
+    private void Update()
     {
         // 로컬 플레이어 클라이언트만 입력을 처리하고 서버로 RPC 요청
         if (!IsClient) return;
@@ -81,7 +96,7 @@ public class DummyManager : NetworkBehaviour
     // 서버만 실행: 실제 더미 스폰 처리
     private void SpawnDummiesInternal(int count, ulong requesterClientId)
     {
-        if (!IsServer) return; // 서버 아니면 무시
+        if (!IsServer) return;
 
         Debug.Log($"[Server Log] Spawning {count} dummies requested by Client {requesterClientId}");
 
@@ -89,6 +104,11 @@ public class DummyManager : NetworkBehaviour
         {
             Debug.LogError("DummyPrefab is not assigned in CombinedDummyManager!");
             return;
+        }
+
+        if (!spawnedDummiesByClient.ContainsKey(requesterClientId))
+        {
+            spawnedDummiesByClient[requesterClientId] = new List<DummyPlayer>();
         }
 
         for (int i = 0; i < count; i++)
@@ -100,14 +120,15 @@ public class DummyManager : NetworkBehaviour
 
             if (networkObject != null && dummyController != null)
             {
-                networkObject.Spawn(true);
+                networkObject.SpawnWithOwnership(requesterClientId, true);
 
-                string dummyName = $"Dummy{dummyCounter++}";
+                string dummyName = $"Dummy{nextDummyId++}";
                 // 랜덤 색상 생성 (Hue만 랜덤하게 하여 너무 어둡거나 밝지 않게)
                 Color randomColor = Random.ColorHSV(0f, 1f, 0.8f, 1f, 0.8f, 1f);
 
                 dummyController.InitializeDummy(dummyName, randomColor);
-                spawnedDummies.Add(dummyController);
+                spawnedDummiesByClient[requesterClientId].Add(dummyController);
+                dummyCounter++;
             }
             else
             {
@@ -115,37 +136,46 @@ public class DummyManager : NetworkBehaviour
                 Destroy(dummyInstance);
             }
         }
-        Debug.Log($"[Server Log] Spawned {count} dummies. Total dummies: {spawnedDummies.Count}");
+        Debug.Log($"[Server Log] Spawned {count} dummies. Total dummies: {dummyCounter}");
     }
 
     // 서버만 실행: 실제 더미 삭제 처리
-    private void DeleteAllDummiesInternal(ulong requesterClientId)
+    private void DeleteAllDummiesInternal(ulong clientId)
     {
         if (!IsServer) return;
 
-        Debug.Log($"[Server Log] Deleting all dummies requested by Client {requesterClientId}");
+        Debug.Log($"[Server Log] Deleting all dummies requested by Client {clientId}");
 
-        for (int i = spawnedDummies.Count - 1; i >= 0; i--)
+        if (spawnedDummiesByClient.TryGetValue(clientId, out List<DummyPlayer> objectsToDespawn))
         {
-            DummyPlayer dummy = spawnedDummies[i];
-            if (dummy != null && dummy.NetworkObject != null && dummy.NetworkObject.IsSpawned)
+            foreach (DummyPlayer dummy in objectsToDespawn)
             {
-                dummy.NetworkObject.Despawn(true); // 네트워크에서 디스폰
+                if (dummy != null && dummy.NetworkObject != null && dummy.NetworkObject.IsSpawned)
+                {
+                    dummy.NetworkObject.Despawn(true);
+                    dummyCounter--;
+                }
             }
+            spawnedDummiesByClient.Remove(clientId);
         }
-        spawnedDummies.Clear();
-        Debug.Log("[Server Log] All dummies deleted.");
+
+        Debug.Log($"[Server Log] Client {clientId}'s All dummies deleted.");
     }
 
-    // 서버만 실행: 더미 AI (움직임 시뮬레이션)
-    void FixedUpdate()
+    private void HandleClientDisconnected(ulong clientId)
     {
-        if (!IsServer) return; // 서버 아니면 무시
+        Debug.Log($"[Server Log] Client {clientId} disconnected. Despawning objects.");
 
-        foreach (DummyPlayer dummy in spawnedDummies)
+        // 이 클라이언트가 소유했던 모든 오브젝트(플레이어 + 더미)를 찾아 디스폰(파괴)합니다.
+        DeleteAllDummiesInternal(clientId);
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        // 서버에서만 콜백 해제
+        if (IsServer)
         {
-            dummy.SimulateMovement();
-            dummy.SimulateJump();
+            NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
         }
     }
 }
