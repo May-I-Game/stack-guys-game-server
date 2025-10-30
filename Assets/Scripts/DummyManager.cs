@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -14,8 +15,10 @@ public class DummyManager : NetworkBehaviour
 
     // 서버에 스폰된 '더미' 목록 (서버 전용)
     private Dictionary<ulong, List<DummyPlayer>> spawnedDummiesByClient = new();
-    private int dummyCounter = 0;
     private int nextDummyId = 0;
+
+    public NetworkVariable<int> dummyCounter { get; private set; } = new NetworkVariable<int>(
+        0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
     // 싱글톤 (편의상)
     public static DummyManager Instance { get; private set; }
@@ -52,14 +55,26 @@ public class DummyManager : NetworkBehaviour
         // 1 키: 더미 1개 생성 요청
         if (Input.GetKeyDown(KeyCode.Alpha1))
         {
-            SpawnDummiesServerRpc(1); // 서버로 요청
+            Color color = new Color(
+                PlayerPrefs.GetFloat("PlayerColorR", 1f),
+                PlayerPrefs.GetFloat("PlayerColorG", 1f),
+                PlayerPrefs.GetFloat("PlayerColorB", 1f)
+            );
+
+            SpawnDummiesServerRpc(1, color); // 서버로 요청
             Debug.Log("[Client Log] Requested to spawn 1 dummy.");
         }
 
         // 2 키: 더미 많이 생성 요청
         if (Input.GetKeyDown(KeyCode.Alpha2))
         {
-            SpawnDummiesServerRpc(numberOfDummiesToSpawn); // 서버로 요청
+            Color color = new Color(
+                PlayerPrefs.GetFloat("PlayerColorR", 1f),
+                PlayerPrefs.GetFloat("PlayerColorG", 1f),
+                PlayerPrefs.GetFloat("PlayerColorB", 1f)
+            );
+
+            SpawnDummiesServerRpc(numberOfDummiesToSpawn, color); // 서버로 요청
             Debug.Log($"[Client Log] Requested to spawn {numberOfDummiesToSpawn} dummies.");
         }
 
@@ -76,10 +91,10 @@ public class DummyManager : NetworkBehaviour
     // ===================================================================
 
     [ServerRpc(RequireOwnership = false)]
-    private void SpawnDummiesServerRpc(int count, ServerRpcParams rpcParams = default)
+    private void SpawnDummiesServerRpc(int count, Color color, ServerRpcParams rpcParams = default)
     {
         // 서버에서만 실행되는 실제 스폰 로직 호출
-        SpawnDummiesInternal(count, rpcParams.Receive.SenderClientId);
+        SpawnDummiesInternal(count, rpcParams.Receive.SenderClientId, color);
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -94,7 +109,7 @@ public class DummyManager : NetworkBehaviour
     // ===================================================================
 
     // 서버만 실행: 실제 더미 스폰 처리
-    private void SpawnDummiesInternal(int count, ulong requesterClientId)
+    private void SpawnDummiesInternal(int count, ulong requesterClientId, Color color)
     {
         if (!IsServer) return;
 
@@ -123,12 +138,10 @@ public class DummyManager : NetworkBehaviour
                 networkObject.SpawnWithOwnership(requesterClientId, true);
 
                 string dummyName = $"Dummy{nextDummyId++}";
-                // 랜덤 색상 생성 (Hue만 랜덤하게 하여 너무 어둡거나 밝지 않게)
-                Color randomColor = Random.ColorHSV(0f, 1f, 0.8f, 1f, 0.8f, 1f);
+                dummyController.SetupDummy(dummyName, color);
 
-                dummyController.InitializeDummy(dummyName, randomColor);
                 spawnedDummiesByClient[requesterClientId].Add(dummyController);
-                dummyCounter++;
+                dummyCounter.Value++;
             }
             else
             {
@@ -136,7 +149,7 @@ public class DummyManager : NetworkBehaviour
                 Destroy(dummyInstance);
             }
         }
-        Debug.Log($"[Server Log] Spawned {count} dummies. Total dummies: {dummyCounter}");
+        Debug.Log($"[Server Log] Spawned {count} dummies. Total dummies: {dummyCounter.Value}");
     }
 
     // 서버만 실행: 실제 더미 삭제 처리
@@ -150,16 +163,19 @@ public class DummyManager : NetworkBehaviour
         {
             foreach (DummyPlayer dummy in objectsToDespawn)
             {
-                if (dummy != null && dummy.NetworkObject != null && dummy.NetworkObject.IsSpawned)
+                if (dummy != null && dummy.NetworkObject != null)
                 {
-                    dummy.NetworkObject.Despawn(true);
-                    dummyCounter--;
+                    if (dummy.NetworkObject.IsSpawned)
+                    {
+                        dummy.NetworkObject.Despawn(true);
+                    }
+                    dummyCounter.Value--;
                 }
             }
             spawnedDummiesByClient.Remove(clientId);
         }
 
-        Debug.Log($"[Server Log] Client {clientId}'s All dummies deleted.");
+        Debug.Log($"[Server Log] Client {clientId}'s All dummies deleted. Total dummies: {dummyCounter.Value}");
     }
 
     private void HandleClientDisconnected(ulong clientId)

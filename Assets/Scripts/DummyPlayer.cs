@@ -1,28 +1,22 @@
 using Unity.Netcode;
 using UnityEngine;
 
-// PlayerController를 상속받아 더미 전용 로직을 추가
 public class DummyPlayer : NetworkPlayer
 {
     private Vector3 currentDirection;
     private float nextDirectionChangeTime;
     private float nextJumpTime;
 
-    public void InitializeDummy(string dummyName, Color dummyColor)
+    public void SetupDummy(string nickName, Color color)
     {
-        playerNickname.Value = dummyName;
-        playerColor.Value = dummyColor;
+        playerNickname.Value = nickName;
+        playerColor.Value = color;
     }
 
-    public override void OnNetworkSpawn()
+    protected override void Initialize()
     {
-        base.OnNetworkSpawn();
-
-        if (IsOwner)
-        {
-            ChangeDirection();
-            ResetJumpTimer();
-        }
+        ChangeDirection();
+        ResetJumpTimer();
     }
 
     // 부모의 Update()가 IsOwner일 때 이 함수를 호출

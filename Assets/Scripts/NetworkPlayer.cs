@@ -62,32 +62,40 @@ public class NetworkPlayer : NetworkBehaviour
         playerNickname.OnValueChanged += OnNicknameChanged;
         playerColor.OnValueChanged += OnColorChanged;
 
+        // 스폰 시점의 '현재' 값으로 즉시 UI/색상 갱신
+        // (늦게 접속한 클라이언트의 동기화)
         UpdateNicknameUI(playerNickname.Value.ToString());
         ApplyColor(playerColor.Value);
 
         // IsOwner: 이 오브젝트가 '내 것'인지 (로컬 플레이어인지) 확인
         if (IsOwner)
         {
-            // 이 오브젝트가 '내 것'이라면 카메라가 따라가도록 설정
-            if (Camera.main != null)
-            {
-                cameraFollow = Camera.main.GetComponent<CameraFollow>();
-                if (cameraFollow != null)
-                {
-                    cameraFollow.SetTarget(this.transform);
-                }
-            }
-
-            // '내' 정보를 서버로 전송합니다.
-            string nickname = PlayerPrefs.GetString("PlayerNickname", "Player");
-            Color color = new Color(
-                PlayerPrefs.GetFloat("PlayerColorR", 1f),
-                PlayerPrefs.GetFloat("PlayerColorG", 1f),
-                PlayerPrefs.GetFloat("PlayerColorB", 1f)
-            );
-
-            SubmitInitialDataServerRpc(nickname, color);
+            Initialize();
         }
+    }
+
+    // 실제 플레이어(Owner)가 스폰될 때 실행할 로직 (카메라, 닉네임 전송)
+    // DummyPlayer는 이 함수를 '재정의(override)'하여 카메라 설정을 막습니다.
+    protected virtual void Initialize()
+    {
+        if (Camera.main != null)
+        {
+            cameraFollow = Camera.main.GetComponent<CameraFollow>();
+            if (cameraFollow != null)
+            {
+                cameraFollow.SetTarget(this.transform);
+            }
+        }
+
+        // 2. '내' 정보를 서버로 전송
+        string nickname = PlayerPrefs.GetString("PlayerNickname", "Player");
+        Color color = new Color(
+            PlayerPrefs.GetFloat("PlayerColorR", 1f),
+            PlayerPrefs.GetFloat("PlayerColorG", 1f),
+            PlayerPrefs.GetFloat("PlayerColorB", 1f)
+        );
+
+        SubmitInitialDataServerRpc(nickname, color);
     }
 
     public override void OnNetworkDespawn()
@@ -203,7 +211,7 @@ public class NetworkPlayer : NetworkBehaviour
     // 클라이언트가 호출 -> '서버'에서만 실행됨
 
     [ServerRpc]
-    private void SubmitInitialDataServerRpc(string nickname, Color color)
+    protected void SubmitInitialDataServerRpc(string nickname, Color color)
     {
         playerNickname.Value = nickname;
         playerColor.Value = color;
@@ -216,14 +224,12 @@ public class NetworkPlayer : NetworkBehaviour
     [ServerRpc]
     protected void SubmitInputServerRpc(Vector3 movement)
     {
-        // 받은 입력을 FixedUpdate가 사용할 수 있도록 저장
         serverInputMovement = movement;
     }
 
     [ServerRpc]
     protected void SubmitJumpServerRpc()
     {
-        Debug.Log($"[Server Log] Player {OwnerClientId} JUMP!");
         serverJumpQueued = true;
     }
 
