@@ -1,7 +1,6 @@
 using TMPro;
-using Unity.Netcode; // Netcode 네임스페이스 추가
+using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /**
@@ -127,8 +126,6 @@ public class LoginManager : MonoBehaviour
         }
     }
 
-    // (이하 SetupColorButtons, OnColorSelected, UpdateColorIndicator, ShowError, HideError는 기존과 동일)
-
     private void SetupColorButtons()
     {
         if (colorButtons == null || colorButtons.Length == 0)
@@ -189,15 +186,6 @@ public class LoginManager : MonoBehaviour
         {
             errorText.text = message;
             errorText.gameObject.SetActive(true);
-
-            // 연결 실패 시에는 HideError를 호출하지 않도록 Invoke 제거
-            // Invoke(nameof(HideError), 3f); 
         }
-    }
-
-    private void HideError()
-    {
-        if (errorText != null)
-            errorText.gameObject.SetActive(false);
     }
 }

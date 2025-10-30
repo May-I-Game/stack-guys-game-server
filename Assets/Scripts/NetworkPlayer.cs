@@ -42,12 +42,13 @@ public class NetworkPlayer : NetworkBehaviour
     // ===================================================================
     // 2. NGO 생명주기 (로컬 플레이어 설정)
     // ===================================================================
+
     public override void OnNetworkSpawn()
     {
         rb = GetComponent<Rigidbody>();
         meshRenderer = GetComponent<MeshRenderer>();
 
-        // [수정] 서버에서는 Rigidbody를 켜고, 클라(원격)에서는 끕니다. (물리 충돌 방지)
+        // 서버에서는 Rigidbody를 켜고, 클라에서는 끄기. (물리 충돌 방지)
         if (IsServer)
         {
             rb.isKinematic = false;
@@ -104,7 +105,7 @@ public class NetworkPlayer : NetworkBehaviour
             nicknameCanvas.transform.Rotate(0, 180, 0);
         }
 
-        // (IsOwner)입력을 받고, 서버로 전송
+        // '내'거면 입력을 받고, 서버로 전송
         if (IsOwner)
         {
             HandleInput();
@@ -112,7 +113,7 @@ public class NetworkPlayer : NetworkBehaviour
     }
 
     // ===================================================================
-    // 4. 서버 로직 (C++의 gameWorld_ 로직)
+    // 4. 서버 로직
     // ===================================================================
     protected virtual void FixedUpdate()
     {
@@ -157,7 +158,7 @@ public class NetworkPlayer : NetworkBehaviour
         }
     }
 
-    // [추가] 색상이 변경되면 이 함수가 호출됨
+    // 색이 바뀔 때 업데이트
     private void OnColorChanged(Color previousValue, Color newValue)
     {
         ApplyColor(newValue);
@@ -171,10 +172,8 @@ public class NetworkPlayer : NetworkBehaviour
         }
     }
 
-    /// <summary>
-    /// (IsOwner) 입력을 처리하고, 서버 RPC를 호출하고, 로컬 예측을 위해 입력을 저장합니다.
-    /// </summary>
-    private void HandleInput()
+    /// (IsOwner) 입력을 처리하고, 서버 RPC를 호출
+    protected virtual void HandleInput()
     {
         float horizontal = Input.GetAxisRaw("Horizontal");
         float vertical = Input.GetAxisRaw("Vertical");
